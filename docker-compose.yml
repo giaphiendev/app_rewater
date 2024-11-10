@@ -1,0 +1,23 @@
+version: "3"
+
+services:
+  app_rewater:
+    build:
+      dockerfile: ./builds/Dockerfile
+      context: .
+    image: image_app_rewater:latest
+    env_file: ./.env
+    ports:
+      - "8000:8000"
+    restart: on-failure
+    volumes:
+      - ./:/opt/app/re_water
+    tty: true
+    stdin_open: true
+    networks:
+      local_rewater:
+    command: bash -c "gunicorn main:app --workers=4 --worker-class=uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000"
+
+networks:
+  local_rewater:
+    driver: bridge
