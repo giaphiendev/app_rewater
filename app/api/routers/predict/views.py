@@ -9,9 +9,10 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 
 from app.core.config import LogConfig
+from loguru import logger
 
 dictConfig(LogConfig().dict())
-logger = logging.getLogger("re_water_app")
+logger_ = logging.getLogger("re_water_app")
 router = APIRouter()
 
 
@@ -84,7 +85,10 @@ async def handler_predict(image: UploadFile = File(...)):
     )
 
     draw = ImageDraw.Draw(image_uploaded)
-    logger.info(f"==== total result: {len(results)} =====")
+    logger.debug(f"==== total result: {len(results)} =====")
+
+    font_size = 24
+    font = ImageFont.load_default(size=font_size)
 
     for result in results:
         boxes = result.boxes
@@ -92,13 +96,22 @@ async def handler_predict(image: UploadFile = File(...)):
         conf_list = boxes.conf.tolist()
         cls_list = list(map(lambda x: list_label[int(x)], boxes.cls.tolist()))
         zipped_boxes = list(zip(cls_list, conf_list, xyxys))
-        
-        logger.info(f"==== number of item in result: {len(zipped_boxes)} =====")
+
+        logger.debug(f"==== number of item in result: {len(zipped_boxes)} =====")
         for item in zipped_boxes:
             # Draw the bounding box and label
             xmin, ymin, xmax, ymax = item[2]
-            draw.rectangle([xmin, ymin, xmax, ymax], outline="red", width=1)
-            draw.text((xmin, ymin - 15), item[0], fill="red")
+            draw.rectangle([xmin, ymin, xmax, ymax], outline="red", width=2)
+
+            pos_text = (xmin, ymin - (font_size + 5))
+            bbox = draw.textbbox(
+                pos_text,
+                text=item[0],
+                # font=font,
+                font_size=font_size,
+            )
+            draw.rectangle(bbox, fill="red")
+            draw.text(pos_text, item[0], fill="white", font=font)
 
     # Prepare the image for streaming
     buf = io.BytesIO()
