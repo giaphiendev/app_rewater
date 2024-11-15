@@ -1,11 +1,14 @@
-import sys
+import sys, os
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
-
+from fastapi.staticfiles import StaticFiles
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime
+from sqlalchemy import text
 from app.api.routers import routers
 from app.core import config
 
@@ -29,6 +32,46 @@ async def logging_dependency(request: Request):
 
 app = FastAPI(title="Tracking API", debug=config.DEBUG)
 
+# init Scheduler
+scheduler = BackgroundScheduler()
+
+
+# define scheduler task
+def scheduled_task():
+    logger.debug(f"[scheduled_task] start at: {datetime.now()}")
+    from app.db.database import engine
+
+    with engine.connect() as connection:
+        connection.execute(text("TRUNCATE TABLE image_result"))
+        connection.execute(text("TRUNCATE TABLE object_predicted"))
+
+        connection.commit()
+        logger.debug(f"[scheduled_task][TRUNCATE] Done")
+
+    static_folder = "static/images"
+    try:
+        for filename in os.listdir(static_folder):
+            file_path = os.path.join(static_folder, filename)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+                logger.debug(f"Deleted file: {file_path}")
+        logger.debug(f"All files in '{static_folder}' deleted at {datetime.now()}")
+    except Exception as e:
+        logger.debug(f"Error while deleting files: {e}")
+
+
+# run job
+scheduler.add_job(scheduled_task, "cron", hour=12, minute=0)
+
+# start scheduler
+scheduler.start()
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    scheduler.shutdown()
+
+
 # CORS
 origins = []
 
@@ -46,6 +89,9 @@ if config.BACKEND_CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# serve static
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.exception_handler(Exception)
@@ -71,11 +117,14 @@ def health():
 
 
 if __name__ == "__main__":
-    # if config.DEBUG:
-    #     if os.environ.get("RUN_MAIN") or os.environ.get("WERKZEUG_RUN_MAIN"):
-    #         import ptvsd
-
-    #         ptvsd.enable_attach(address=("0.0.0.0", 3000))
-    #         print("Attached!")
-
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, env_file=".env")
+
+    print(f"config.DEBUG: {config.DEBUG}")
+    if config.DEBUG:
+        # if os.environ.get("RUN_MAIN") or os.environ.get("WERKZEUG_RUN_MAIN"):
+        import ptvsd
+
+        ptvsd.enable_attach(address=("0.0.0.0", 3030))
+        print("Attached!")
+
+    print(f"app is running on 8000")

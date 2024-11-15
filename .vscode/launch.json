@@ -21,3 +21,24 @@
         }
     ]
 }
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Python: Remote Attach",
+//             "type": "debugpy",
+//             "request": "attach",
+//             "connect": {
+//                 "host": "localhost",
+//                 "port": 3030
+//             },
+//             "pathMappings": [
+//                 {
+//                     "localRoot": "${workspaceFolder}/",
+//                     "remoteRoot": "/opt/app/re_water"
+//                 }
+//             ],
+//             "justMyCode": true
+//         }
+//     ]
+// }

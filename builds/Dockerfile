@@ -1,5 +1,5 @@
 # Make base state
-FROM python:3.8-slim-buster as base_python3.10
+FROM python:3.10 as base_python3.10
 
 # install dependencies
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive \
