@@ -48,17 +48,21 @@ def health_check():
     )
 
 
-@router.post("/predict_")
-async def handler_predict(image: UploadFile = File(...)):
+@router.post("/predict")
+async def handler_predict(
+    image: UploadFile = File(...),
+    session: Session = Depends(get_db),
+):
     contents = await image.read()
     bytes_io = io.BytesIO(contents)
     image_uploaded = Image.open(bytes_io).convert("RGB")
 
     model = YOLO("model-ai/yolov8_ver2.pt")
     list_label = ["plastic"]
+    confidence = 0.4
     results = model(
-        source=[image_uploaded],
-        conf=0.35,
+        source=image_uploaded,
+        conf=confidence,
         save=False,
         project="static/images",
         name="predict",
@@ -70,36 +74,72 @@ async def handler_predict(image: UploadFile = File(...)):
     font_size = 24
     font = ImageFont.load_default(size=font_size)
 
-    for result in results:
-        boxes = result.boxes
-        xyxys = boxes.xyxy.tolist()
-        conf_list = boxes.conf.tolist()
-        cls_list = list(map(lambda x: list_label[int(x)], boxes.cls.tolist()))
-        zipped_boxes = list(zip(cls_list, conf_list, xyxys))
+    _list_obj_predict = []
+    sum_accuracy = 0
+    result = results[0]
 
-        logger.debug(f"==== number of item in result: {len(zipped_boxes)} =====")
-        for item in zipped_boxes:
-            # Draw the bounding box and label
-            xmin, ymin, xmax, ymax = item[2]
-            draw.rectangle([xmin, ymin, xmax, ymax], outline="red", width=2)
+    boxes = result.boxes
+    xyxys = boxes.xyxy.tolist()
+    conf_list = boxes.conf.tolist()
+    cls_list = list(map(lambda x: list_label[int(x)], boxes.cls.tolist()))
+    zipped_boxes = list(zip(cls_list, conf_list, xyxys))
 
-            pos_text = (xmin, ymin - (font_size + 5))
-            bbox = draw.textbbox(
-                pos_text,
-                text=item[0],
-                # font=font,
-                font_size=font_size,
-            )
-            draw.rectangle(bbox, fill="red")
-            draw.text(pos_text, item[0], fill="white", font=font)
+    logger.debug(f"==== number of item in result: {len(zipped_boxes)} =====")
+    for item in zipped_boxes:
+        _label = item[0]
+        _confidence = item[1]
+        sum_accuracy += _confidence
+        # Draw the bounding box and label
+        xmin, ymin, xmax, ymax = item[2]
+        _list_obj_predict.append(
+            {
+                "accuracy": _confidence,
+                "label": _label,
+                "xmin": xmin,
+                "ymin": ymin,
+                "xmax": xmax,
+                "ymax": ymax,
+            }
+        )
+        draw.rectangle([xmin, ymin, xmax, ymax], outline="red", width=2)
+
+        pos_text = (xmin, ymin - (font_size + 5))
+        bbox = draw.textbbox(
+            pos_text,
+            text=_label,
+            # font=font,
+            font_size=font_size,
+        )
+        draw.rectangle(bbox, fill="red")
+        draw.text(pos_text, _label, fill="white", font=font)
 
     file_path = os.path.join("static", "images", image.filename)
     image_uploaded.save(file_path, format="JPEG")
+
+    context = {
+        "file_path": file_path,
+        "file_name": image.filename,
+        "object_predict": _list_obj_predict,
+        "average_accuracy": sum_accuracy / len(_list_obj_predict),
+    }
     # save into mysql
-    return JSONResponse({"file_path": file_path})
+
+    img_result_service = CRUDImageResult(session=session)
+    obj_predicted_service = CRUDObjectPredicted(session=session)
+
+    _new_obj = img_result_service.create(
+        {
+            "file_path": file_path,
+            "file_name": image.filename,
+        }
+    )
+    list_obj_predict_save = [{**it, "image_result_id": _new_obj.id} for it in _list_obj_predict]
+    obj_predicted_service.create_multiple(list_obj_predict_save)
+
+    return JSONResponse({"data": context})
 
 
-@router.post("/predicts")
+@router.post("/predict-multiple")
 async def handler_predict_multi(
     images: List[UploadFile] = File(...),
     session: Session = Depends(get_db),
