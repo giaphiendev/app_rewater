@@ -112,12 +112,21 @@ async def handler_predict(
         )
         draw.rectangle(bbox, fill="red")
         draw.text(pos_text, _label, fill="white", font=font)
-    
-    if len(_list_obj_predict) < 0:
-        return JSONResponse({"data": {}})
 
     file_path = os.path.join("static", "images", image.filename)
     image_uploaded.save(file_path, format="JPEG")
+
+    if len(_list_obj_predict) < 1:
+        return JSONResponse(
+            {
+                "data": {
+                    "file_path": file_path,
+                    "file_name": image.filename,
+                    "object_predict": [],
+                    "average_accuracy": 0,
+                }
+            }
+        )
 
     context = {
         "file_path": file_path,
@@ -136,7 +145,9 @@ async def handler_predict(
             "file_name": image.filename,
         }
     )
-    list_obj_predict_save = [{**it, "image_result_id": _new_obj.id} for it in _list_obj_predict]
+    list_obj_predict_save = [
+        {**it, "image_result_id": _new_obj.id} for it in _list_obj_predict
+    ]
     obj_predicted_service.create_multiple(list_obj_predict_save)
 
     return JSONResponse({"data": context})
