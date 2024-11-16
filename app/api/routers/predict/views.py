@@ -112,6 +112,9 @@ async def handler_predict(
         )
         draw.rectangle(bbox, fill="red")
         draw.text(pos_text, _label, fill="white", font=font)
+    
+    if len(_list_obj_predict) < 0:
+        return JSONResponse({"data": {}})
 
     file_path = os.path.join("static", "images", image.filename)
     image_uploaded.save(file_path, format="JPEG")
