@@ -1,5 +1,6 @@
 import logging
 import io, os
+from datetime import datetime
 from sqlalchemy.orm.session import Session
 from logging.config import dictConfig
 from fastapi import APIRouter, UploadFile, File, Depends
@@ -7,6 +8,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from ultralytics import YOLO
 import torch
 from PIL import Image, ImageDraw, ImageFont
+from sqlalchemy import text
 from typing import List
 from app.services.image_result import CRUDImageResult, CRUDObjectPredicted
 
@@ -37,12 +39,27 @@ class ObjectDetection:
         return results
 
 
-@router.get("/health")
-def health_check():
+@router.get("/seset-db")
+def health_check(
+    session: Session = Depends(get_db),
+):
+    session.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+    session.execute(text("TRUNCATE TABLE object_predicted"))
+    session.execute(text("TRUNCATE TABLE image_result"))
+    session.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+
+    static_folder = "static/images"
+    for filename in os.listdir(static_folder):
+        file_path = os.path.join(static_folder, filename)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+            logger.debug(f"Deleted file: {file_path}")
+    logger.debug(f"All files in '{static_folder}' deleted at {datetime.now()}")
+
     return JSONResponse(
         status_code=200,
         content={
-            "message": "OK",
+            "message": "reset db and clear all images!",
             "status": True,
         },
     )
@@ -55,7 +72,18 @@ async def handler_predict(
 ):
     contents = await image.read()
     bytes_io = io.BytesIO(contents)
-    image_uploaded = Image.open(bytes_io).convert("RGB")
+    Image.MAX_IMAGE_PIXELS = 1080872743
+    try:
+        image_uploaded = Image.open(bytes_io).convert("RGB")
+    except Image.DecompressionBombError as err:
+        logger.error(f"==== Large image could not handle: {err} =====")
+        return JSONResponse(
+            {
+                "message": f"Image size exceeds limit (1080872743 pixel).",
+                "status": False,
+            },
+            status_code=400,
+        )
 
     model = YOLO("model-ai/yolov8_ver2.pt")
     list_label = ["plastic"]
@@ -69,8 +97,6 @@ async def handler_predict(
     )
 
     draw = ImageDraw.Draw(image_uploaded)
-    logger.debug(f"==== total result: {len(results)} =====")
-
     font_size = 24
     font = ImageFont.load_default(size=font_size)
 
@@ -117,6 +143,10 @@ async def handler_predict(
     image_uploaded.save(file_path, format="JPEG")
 
     if len(_list_obj_predict) < 1:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+            logger.debug(f"Deleted file: {file_path}")
+
         return JSONResponse(
             {
                 "data": {
@@ -145,10 +175,12 @@ async def handler_predict(
             "file_name": image.filename,
         }
     )
+    result_id = _new_obj.id
     list_obj_predict_save = [
-        {**it, "image_result_id": _new_obj.id} for it in _list_obj_predict
+        {**it, "image_result_id": result_id} for it in _list_obj_predict
     ]
     obj_predicted_service.create_multiple(list_obj_predict_save)
+    logger.debug(f"==== save result into mysql - ID: {result_id} =====")
 
     return JSONResponse({"data": context})
 

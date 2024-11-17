@@ -41,15 +41,18 @@ def scheduled_task():
     logger.debug(f"[scheduled_task] start at: {datetime.now()}")
     from app.db.database import engine
 
-    with engine.connect() as connection:
-        connection.execute(text("TRUNCATE TABLE image_result"))
-        connection.execute(text("TRUNCATE TABLE object_predicted"))
-
-        connection.commit()
-        logger.debug(f"[scheduled_task][TRUNCATE] Done")
-
-    static_folder = "static/images"
     try:
+        with engine.connect() as connection:
+
+            connection.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+            connection.execute(text("TRUNCATE TABLE object_predicted"))
+            connection.execute(text("TRUNCATE TABLE image_result"))
+            connection.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+
+            connection.commit()
+            logger.debug(f"[scheduled_task][TRUNCATE] Done")
+        #
+        static_folder = "static/images"
         for filename in os.listdir(static_folder):
             file_path = os.path.join(static_folder, filename)
             if os.path.isfile(file_path):

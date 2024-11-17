@@ -36,12 +36,12 @@ class CRUDImageResult(CRUDBase):
     #         .first()
     #     )  # type: ignore
 
-    def create(self, data):
-        json_body = jsonable_encoder(data)
-        new_obj = self.model(**json_body)
+    # def create(self, data):
+    #     json_body = jsonable_encoder(data)
+    #     new_obj = self.model(**json_body)
 
-        self.session.add(new_obj)
-        self.session.commit()
-        self.session.refresh(new_obj)
+    #     self.session.add(new_obj)
+    #     self.session.commit()
+    #     self.session.refresh(new_obj)
 
-        return new_obj
+    #     return new_obj
