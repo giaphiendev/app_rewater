@@ -143,9 +143,10 @@ async def handler_predict(
     image_uploaded.save(file_path, format="JPEG")
 
     if len(_list_obj_predict) < 1:
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-            logger.debug(f"Deleted file: {file_path}")
+        # if os.path.isfile(file_path):
+        #     os.remove(file_path)
+        #     logger.debug(f"Deleted file: {file_path}")
+        logger.debug(f"==== Object not founded! =====")
 
         return JSONResponse(
             {
