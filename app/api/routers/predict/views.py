@@ -24,7 +24,7 @@ router = APIRouter()
 
 model = YOLO("model-ai/yolov8_ver2.pt")
 list_label = ["plastic"]
-confidence = 0.4
+confidence = 0.35
 
 
 class ObjectDetection:
@@ -112,9 +112,10 @@ async def handler_predict(
     font_size = 24
     font = ImageFont.load_default(size=font_size)
 
-    for label, conf, bbox in zipped_boxes:
+    for idx, (_label, conf, bbox) in enumerate(zipped_boxes):
         (xmin, ymin, xmax, ymax) = bbox
         sum_accuracy += conf
+        label = f"{_label} {idx+1}"
         _list_obj_predict.append(
             {
                 "accuracy": conf,
