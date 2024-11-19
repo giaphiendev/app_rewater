@@ -39,18 +39,18 @@ scheduler = BackgroundScheduler()
 # define scheduler task
 def scheduled_task():
     logger.debug(f"[scheduled_task] start at: {datetime.now()}")
-    from app.db.database import engine
+    # from app.db.database import engine
 
     try:
-        with engine.connect() as connection:
+        # with engine.connect() as connection:
 
-            connection.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
-            connection.execute(text("TRUNCATE TABLE object_predicted"))
-            connection.execute(text("TRUNCATE TABLE image_result"))
-            connection.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+        #     connection.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+        #     connection.execute(text("TRUNCATE TABLE object_predicted"))
+        #     connection.execute(text("TRUNCATE TABLE image_result"))
+        #     connection.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
 
-            connection.commit()
-            logger.debug(f"[scheduled_task][TRUNCATE] Done")
+        #     connection.commit()
+        #     logger.debug(f"[scheduled_task][TRUNCATE] Done")
         #
         static_folder = "static/images"
         for filename in os.listdir(static_folder):
@@ -118,7 +118,7 @@ def health():
         content={"message": "OK", "data": None},
     )
 
-
+'''
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, env_file=".env")
 
@@ -131,3 +131,5 @@ if __name__ == "__main__":
         print("Attached!")
 
     print(f"app is running on 8000")
+
+'''
