@@ -24,7 +24,7 @@ dictConfig(LogConfig().dict())
 logger_ = logging.getLogger("re_water_app")
 router = APIRouter()
 
-model = YOLO("model-ai/yolov8_ver2.pt")
+model = YOLO("model-ai/yolov8_ver3.pt")
 list_label = ["plastic"]
 confidence = 0.7
 
