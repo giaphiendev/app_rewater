@@ -16,6 +16,8 @@ from typing import List
 from app.core.config import LogConfig
 from loguru import logger
 
+from app.api.routers.predict.utils import HandlerLargeImage
+
 # from app.db.database import get_db
 
 dictConfig(LogConfig().dict())
@@ -24,7 +26,7 @@ router = APIRouter()
 
 model = YOLO("model-ai/yolov8_ver2.pt")
 list_label = ["plastic"]
-confidence = 0.35
+confidence = 0.7
 
 
 class ObjectDetection:
@@ -81,8 +83,8 @@ async def handler_predict(
             buffer.write(chunk)
 
     try:
-        Image.MAX_IMAGE_PIXELS = 500000000
-        image_uploaded = Image.open(file_path).convert("RGB")
+        image_uploaded = HandlerLargeImage(file_path)
+        patches_img = image_uploaded.split_image()
     except Image.DecompressionBombError as err:
         logger.error(f"==== Large image could not handle: {err} =====")
         return JSONResponse(
@@ -93,29 +95,43 @@ async def handler_predict(
             status_code=400,
         )
 
-    results = model(source=image_uploaded, conf=confidence, save=False)
+    results = model(source=patches_img, conf=confidence, save=False)
 
     _list_obj_predict = []
     sum_accuracy = 0
-    result = results[0]
 
-    boxes = result.boxes
-    xyxys = boxes.xyxy.tolist()
-    conf_list = boxes.conf.tolist()
-
-    cls_list = [list_label[int(x)] for x in boxes.cls.tolist()]
-    zipped_boxes = list(zip(cls_list, conf_list, xyxys))
-
-    logger.debug(f"==== number of items in result: {len(zipped_boxes)} =====")
-
-    draw = ImageDraw.Draw(image_uploaded)
     font_size = 24
     font = ImageFont.load_default(size=font_size)
 
-    for idx, (_label, conf, bbox) in enumerate(zipped_boxes):
-        (xmin, ymin, xmax, ymax) = bbox
+    count_obj = 0
+    list_offset = image_uploaded.offset_img
+    zipped_boxes = []
+    for i, result in enumerate(results):
+        boxes = result.boxes
+
+        for id_obj, coor in enumerate(boxes.xyxy.tolist()):
+            conf = float(boxes.conf[id_obj])
+            cls = list_label[int(boxes.cls[id_obj])]
+
+            zipped_boxes.append([cls, conf, coor, list_offset[i]])
+
+    save_img = image_uploaded.merge_patches()
+    draw = ImageDraw.Draw(save_img)
+
+    for _label, conf, bbox, offset in zipped_boxes:
+        count_obj += 1
+        # (xmin, ymin, xmax, ymax) = bbox
+        offset_x = offset["offset_x"]
+        offset_y = offset["offset_y"]
+        xmin = bbox[0] + offset_x
+        xmax = bbox[2] + offset_x
+
+        ymin = bbox[1] + offset_y
+        ymax = bbox[3] + offset_y
+
         sum_accuracy += conf
-        label = f"{_label} {idx+1}"
+        label = f"{_label} {count_obj}"
+
         _list_obj_predict.append(
             {
                 "accuracy": conf,
@@ -126,19 +142,19 @@ async def handler_predict(
                 "ymax": ymax,
             }
         )
-        draw.rectangle([xmin, ymin, xmax, ymax], outline="red", width=2)
 
+        draw.rectangle([xmin, ymin, xmax, ymax], outline="red", width=2)
         pos_text = (xmin, ymin - (font_size + 5))
-        bbox = draw.textbbox(
+        bbox_text = draw.textbbox(
             pos_text,
             text=label,
-            # font=font,
             font_size=font_size,
         )
-        draw.rectangle(bbox, fill="red")
+        draw.rectangle(bbox_text, fill="red")
         draw.text(pos_text, label, fill="white", font=font)
 
-    image_uploaded.save(file_path, format="JPEG")
+    save_img.save(file_path)
+
     if not _list_obj_predict:
         logger.debug("==== Object not found! =====")
         return JSONResponse(
@@ -152,11 +168,13 @@ async def handler_predict(
             }
         )
 
-    avg_accuracy = sum_accuracy / len(_list_obj_predict)
+    total_obj = len(_list_obj_predict)
+    avg_accuracy = sum_accuracy / total_obj
 
     context = {
         "file_path": file_path,
         "file_name": image.filename,
+        "total_obj_predict": total_obj,
         "object_predict": _list_obj_predict,
         "average_accuracy": avg_accuracy,
     }
